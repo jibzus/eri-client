@@ -1,6 +1,6 @@
 import { classifyFields, isBasicsField, isEvidenceField, WizardStep } from './wizard-steps';
 
-const field = (over: Partial<any> = {}): any => ({
+const field = (over: any = {}): any => ({
   key: over.key ?? Math.random().toString(36).slice(2),
   type: 'varchar',
   input: 'text',
