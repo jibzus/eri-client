@@ -21,6 +21,8 @@ jobs:
           node-version: '18'
       - name: Install deps
         run: npm ci --no-audit --no-fund --legacy-peer-deps
+      - name: Unit test (Eri wizard step classifier)
+        run: npx nx test web-mzima-client --testPathPattern=wizard-steps --skip-nx-cache
       - name: Build web client
         run: npm run web:build
       - name: Package dist

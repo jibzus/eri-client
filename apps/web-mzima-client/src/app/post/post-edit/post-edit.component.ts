@@ -52,13 +52,9 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { LanguageInterface } from '@mzima-client/sdk';
 import { MatSelectChange } from '@angular/material/select';
 
-dayjs.extend(timezone);
+import { WizardStep, classifyFields } from './wizard-steps';
 
-interface WizardStep {
-  id: 'basics' | 'details' | 'evidence' | 'review';
-  label: string;
-  fields: any[];
-}
+dayjs.extend(timezone);
 
 @Component({
   selector: 'app-post-edit',
@@ -327,35 +323,14 @@ export class PostEditComponent extends BaseComponent implements OnInit, OnChange
     }
   }
   // ----- Eri wizard: group survey fields into meaningful steps -----
-  private isBasicsField(f: any): boolean {
-    return f.type === 'title' || f.type === 'description' || f.input === 'tags' || f.input === 'location';
-  }
-
-  private isEvidenceField(f: any): boolean {
-    return f.type === 'media' || f.input === 'video';
-  }
-
   private buildSteps(): void {
     const all: any[] = [];
     for (const task of this.tasks || []) {
       for (const field of task.fields || []) {
-        if (field.key) all.push(field);
+        all.push(field);
       }
     }
-    const byPriority = (a: any, b: any) => (a.priority || 0) - (b.priority || 0);
-    const basics = all.filter((f) => this.isBasicsField(f)).sort(byPriority);
-    const evidence = all.filter((f) => this.isEvidenceField(f)).sort(byPriority);
-    const details = all
-      .filter((f) => !this.isBasicsField(f) && !this.isEvidenceField(f))
-      .sort(byPriority);
-
-    const steps: WizardStep[] = [];
-    if (basics.length) steps.push({ id: 'basics', label: 'Basics', fields: basics });
-    if (details.length) steps.push({ id: 'details', label: 'Details', fields: details });
-    if (evidence.length) steps.push({ id: 'evidence', label: 'Evidence', fields: evidence });
-    steps.push({ id: 'review', label: 'Review', fields: [] });
-
-    this.steps = steps;
+    this.steps = classifyFields(all);
     this.activeStepIndex = 0;
     this.stepError = false;
   }
