@@ -54,6 +54,12 @@ import { MatSelectChange } from '@angular/material/select';
 
 dayjs.extend(timezone);
 
+interface WizardStep {
+  id: 'basics' | 'details' | 'evidence' | 'review';
+  label: string;
+  fields: any[];
+}
+
 @Component({
   selector: 'app-post-edit',
   templateUrl: './post-edit.component.html',
@@ -82,6 +88,9 @@ export class PostEditComponent extends BaseComponent implements OnInit, OnChange
   public relationSearch: string;
   public selectedRelatedPost: any;
   private completeStages: number[] = [];
+  public steps: WizardStep[] = [];
+  public activeStepIndex = 0;
+  public stepError = false;
   private fieldsFormArray = ['tags'];
   public surveyName: string;
   private postId?: number;
@@ -283,6 +292,7 @@ export class PostEditComponent extends BaseComponent implements OnInit, OnChange
         this.form = new FormGroup(fields);
         this.initialFormData = this.form.value;
         this.handleOtherOptions();
+        this.buildSteps();
         if (updateContent) {
           this.isEditPost = true;
           this.tasks = postHelpers.markCompletedTasks(this.tasks, this.post);
@@ -316,6 +326,170 @@ export class PostEditComponent extends BaseComponent implements OnInit, OnChange
       });
     }
   }
+  // ----- Eri wizard: group survey fields into meaningful steps -----
+  private isBasicsField(f: any): boolean {
+    return f.type === 'title' || f.type === 'description' || f.input === 'tags' || f.input === 'location';
+  }
+
+  private isEvidenceField(f: any): boolean {
+    return f.type === 'media' || f.input === 'video';
+  }
+
+  private buildSteps(): void {
+    const all: any[] = [];
+    for (const task of this.tasks || []) {
+      for (const field of task.fields || []) {
+        if (field.key) all.push(field);
+      }
+    }
+    const byPriority = (a: any, b: any) => (a.priority || 0) - (b.priority || 0);
+    const basics = all.filter((f) => this.isBasicsField(f)).sort(byPriority);
+    const evidence = all.filter((f) => this.isEvidenceField(f)).sort(byPriority);
+    const details = all
+      .filter((f) => !this.isBasicsField(f) && !this.isEvidenceField(f))
+      .sort(byPriority);
+
+    const steps: WizardStep[] = [];
+    if (basics.length) steps.push({ id: 'basics', label: 'Basics', fields: basics });
+    if (details.length) steps.push({ id: 'details', label: 'Details', fields: details });
+    if (evidence.length) steps.push({ id: 'evidence', label: 'Evidence', fields: evidence });
+    steps.push({ id: 'review', label: 'Review', fields: [] });
+
+    this.steps = steps;
+    this.activeStepIndex = 0;
+    this.stepError = false;
+  }
+
+  get activeStep(): WizardStep {
+    return this.steps[this.activeStepIndex];
+  }
+
+  get isReviewStep(): boolean {
+    return this.activeStep?.id === 'review';
+  }
+
+  get isFirstStep(): boolean {
+    return this.activeStepIndex === 0;
+  }
+
+  get inputSteps(): WizardStep[] {
+    return this.steps.filter((s) => s.id !== 'review');
+  }
+
+  get progressPct(): number {
+    return this.steps.length ? ((this.activeStepIndex + 1) / this.steps.length) * 100 : 0;
+  }
+
+  public isStepValid(step: WizardStep): boolean {
+    if (!step) return true;
+    const hasLocation = step.fields.some((f: any) => f.input === 'location');
+    if (hasLocation && this.emptyLocation) return false;
+    return step.fields.every((f: any) => {
+      const control = this.form.get(f.key);
+      return !control || control.valid;
+    });
+  }
+
+  private touchStep(step: WizardStep): void {
+    step.fields.forEach((f: any) => this.form.get(f.key)?.markAsTouched());
+  }
+
+  private scrollToTop(): void {
+    const el = document.querySelector('.post-item-page');
+    if (el) el.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  public nextStep(): void {
+    if (!this.isStepValid(this.activeStep)) {
+      this.touchStep(this.activeStep);
+      this.stepError = true;
+      return;
+    }
+    this.stepError = false;
+    if (this.activeStepIndex < this.steps.length - 1) {
+      this.activeStepIndex++;
+      this.scrollToTop();
+    }
+  }
+
+  public prevStep(): void {
+    this.stepError = false;
+    if (this.activeStepIndex > 0) {
+      this.activeStepIndex--;
+      this.scrollToTop();
+    }
+  }
+
+  public goToStep(index: number): void {
+    if (index === this.activeStepIndex) return;
+    if (index < this.activeStepIndex) {
+      this.activeStepIndex = index;
+      this.stepError = false;
+      this.scrollToTop();
+      return;
+    }
+    for (let s = this.activeStepIndex; s < index; s++) {
+      if (!this.isStepValid(this.steps[s])) {
+        this.touchStep(this.steps[s]);
+        this.activeStepIndex = s;
+        this.stepError = true;
+        this.scrollToTop();
+        return;
+      }
+    }
+    this.activeStepIndex = index;
+    this.stepError = false;
+    this.scrollToTop();
+  }
+
+  public fieldLabel(field: any): string {
+    return field?.translations?.[this.activeLanguage]?.label || field?.label || '';
+  }
+
+  public getReviewValue(field: any): string {
+    const dash = '—';
+    const v = this.form?.get(field.key)?.value;
+    if (v === null || v === undefined || v === '') return dash;
+    switch (field.input) {
+      case 'location':
+        return v?.lat && v?.lng ? `${(+v.lat).toFixed(4)}, ${(+v.lng).toFixed(4)}` : dash;
+      case 'tags': {
+        if (!Array.isArray(v) || !v.length) return dash;
+        const names: string[] = [];
+        const collect = (opts: any[]) =>
+          opts?.forEach((o: any) => {
+            if (v.includes(o.id)) names.push(o.tag);
+            if (o.children) collect(o.children);
+          });
+        collect(field.options || []);
+        return names.length ? names.join(', ') : `${v.length} selected`;
+      }
+      case 'checkbox': {
+        if (!Array.isArray(v) || !v.length) return dash;
+        const other = this.form.get('other' + field.key)?.value;
+        return v.map((x: any) => (x === 'Other' && other ? other : x)).join(', ');
+      }
+      case 'radio':
+        return v === 'Other' ? this.form.get('other' + field.key)?.value || 'Other' : String(v);
+      case 'upload':
+        return v?.photo || v?.id ? '1 file attached' : dash;
+      case 'image':
+      case 'audio':
+      case 'document':
+        return Array.isArray(v) && v.length ? `${v.length} file(s) attached` : dash;
+      case 'date':
+        return v ? dayjs(v).format('DD MMM YYYY') : dash;
+      case 'datetime':
+        return v ? dayjs(v).format('DD MMM YYYY, HH:mm') : dash;
+      default:
+        return String(v);
+    }
+  }
+
+  public isReviewEmpty(field: any): boolean {
+    return this.getReviewValue(field) === '—';
+  }
+
   public hasEmptyOther(key: string) {
     const emptyOther =
       this.form.get(key)?.value?.includes('Other') &&
@@ -740,6 +914,9 @@ export class PostEditComponent extends BaseComponent implements OnInit, OnChange
     }
 
     const postLanguage = this.selectedLanguage?.code || this.languageService.initialLanguage;
+    // Eri wizard: every stage is completed via the review step, so mark them all
+    // complete here rather than relying on the per-task "mark completed" toggle.
+    this.completeStages = (this.tasks || []).map((task: any) => task.id);
     const postData = {
       base_language: postLanguage,
       completed_stages: this.completeStages,
