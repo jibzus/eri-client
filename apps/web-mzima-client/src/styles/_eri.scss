@@ -1,0 +1,107 @@
+/* ============================================================
+   Eri — "Civic Trust" theme override for the Ushahidi Mzima client
+   ------------------------------------------------------------
+   Re-skins the deployed client WITHOUT an Angular rebuild by
+   redefining the app's :root CSS custom properties, plus a small
+   number of targeted fixes where dark text/colour was baked onto
+   what is now a deep-green primary.
+
+   Deploy: serve this file from the client web root and inject
+     <link rel="stylesheet" href="eri-theme.css">
+   as the LAST stylesheet in index.html (so it wins the cascade).
+
+   Validated live against http://3.95.45.241 on 2026-07-06.
+   Known remaining (not CSS): the Ushahidi wordmark + orange globe
+   logo are image/site-config assets and must be swapped separately.
+   ============================================================ */
+
+:root {
+  /* Primary = deep civic green (was Ushahidi gold/yellow ramp) */
+  --color-primary-10:  #0A251D;
+  --color-primary-20:  #0C2E24;
+  --color-primary-30:  #0F3A2E;
+  --color-primary-40:  #124636;
+  --color-primary-50:  #14503F;
+  --color-primary-60:  #165C4A;  /* base — buttons, active states */
+  --color-primary-70:  #2E7D68;
+  --color-primary-80:  #79B0A2;
+  --color-primary-90:  #C9E0D9;
+  --color-primary-100: #E4EFEA;  /* lightest tint / backgrounds */
+
+  /* Neutrals — biased toward green ink rather than flat grey */
+  --color-neutral-10:  #F6F8F5;
+  --color-neutral-20:  #EBEFEB;
+  --color-neutral-30:  #E2E7E2;
+  --color-neutral-40:  #D9E0DA;
+  --color-neutral-50:  #C3CCC5;
+  --color-neutral-60:  #9AA6A0;
+  --color-neutral-70:  #6E7C76;
+  --color-neutral-80:  #46554F;
+  --color-neutral-90:  #2A342F;
+  --color-neutral-100: #16211D;  /* primary ink text */
+
+  --color-black:       #16211D;
+  --color-black-shade: #0F1714;
+  --color-black-tint:  #2A342F;
+
+  /* Semantic status — matched to the verification lifecycle */
+  --color-success:            #0F7A52;  /* verified */
+  --color-success-shade:      #0C6544;
+  --color-success-tint:       #2E8F6C;
+  --color-success-tint-light: #E1F1E8;
+  --color-info:               #3B5C8A;  /* neutral / unverified slate */
+  --color-info-shade:         #324F77;
+  --color-info-tint:          #4E6E9B;
+  --color-accent:             #B23A2E;  /* error / required / disputed red */
+  --color-accent-shade:       #8F2E24;
+  --color-accent-tint:        #C25446;
+}
+
+/* --- Targeted contrast fixes ------------------------------------ */
+
+/* Solid primary buttons baked ink text (--color-neutral-100) onto the
+   background; on deep green that is unreadable — force white label + icon. */
+.mzima-button--solid.mzima-button--primary {
+  color: #fff !important;
+}
+.mzima-button--solid.mzima-button--primary svg,
+.mzima-button--solid.mzima-button--primary .mzima-button__icon,
+.mzima-button--solid.mzima-button--primary mat-icon {
+  color: #fff !important;
+  fill:  #fff !important;
+}
+
+/* Legacy Angular Material primary buttons, same issue. */
+.mat-flat-button.mat-primary,
+.mat-raised-button.mat-primary,
+.mat-fab.mat-primary,
+.mat-mini-fab.mat-primary {
+  color: #fff !important;
+}
+
+/* Dark sidebar: the active item's deep-green primary is too dark on the
+   near-black rail — use a brighter green so it reads. */
+.sidebar-menu-button--active,
+.sidebar-menu-button--active * {
+  color: #4FB08F !important;
+}
+.sidebar-menu-button--active .sidebar-menu-button__accent,
+.sidebar-menu-button--active svg {
+  color: #4FB08F !important;
+  fill:  #4FB08F !important;
+}
+
+/* Map cluster bubbles: Leaflet markercluster defaults to amber — re-skin to
+   the civic green, with white counts, keeping the size gradation. */
+.marker-cluster {
+  background-color: rgba(22, 92, 74, 0.22) !important;
+}
+.marker-cluster div {
+  background-color: #165C4A !important;
+  color: #fff !important;
+}
+.marker-cluster-small        { background-color: rgba(46, 125, 104, 0.24) !important; }
+.marker-cluster-small div    { background-color: #2E7D68 !important; }
+.marker-cluster-large        { background-color: rgba(14, 62, 50, 0.26) !important; }
+.marker-cluster-large div    { background-color: #0E3E32 !important; }
+.marker-cluster div span     { color: #fff !important; }

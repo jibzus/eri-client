@@ -1,0 +1,48 @@
+name: build-and-deploy
+on:
+  push:
+    branches: [development]
+  workflow_dispatch:
+permissions:
+  id-token: write
+  contents: read
+env:
+  AWS_REGION: us-east-1
+  INSTANCE_ID: i-0f83efe7453cf8e55
+  S3_BUCKET: eri-mvp-artifacts-860945038827-us-east-1
+  ROLE_ARN: arn:aws:iam::860945038827:role/eri-github-actions-deploy
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install deps
+        run: npm ci --no-audit --no-fund --legacy-peer-deps
+      - name: Build web client
+        run: npm run web:build
+      - name: Package dist
+        run: tar -C dist/apps/web-mzima-client -czf eri-dist.tgz .
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Deploy to box via SSM
+        run: |
+          KEY="ci/eri-dist-${{ github.sha }}.tgz"
+          aws s3 cp eri-dist.tgz "s3://$S3_BUCKET/$KEY"
+          URL=$(aws s3 presign "s3://$S3_BUCKET/$KEY" --expires-in 900)
+          CMD=$(aws ssm send-command --region "$AWS_REGION" --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --parameters commands="[\"curl -fsSL '$URL' -o /tmp/eri-dist.tgz && /opt/eri/ci-deploy.sh\"]" \
+            --query Command.CommandId --output text)
+          echo "SSM CommandId=$CMD"
+          aws ssm wait command-executed --region "$AWS_REGION" --command-id "$CMD" --instance-id "$INSTANCE_ID" || true
+          STATUS=$(aws ssm get-command-invocation --region "$AWS_REGION" --command-id "$CMD" --instance-id "$INSTANCE_ID" --query Status --output text)
+          echo "=== box deploy output ==="
+          aws ssm get-command-invocation --region "$AWS_REGION" --command-id "$CMD" --instance-id "$INSTANCE_ID" --query StandardOutputContent --output text
+          echo "Deploy status: $STATUS"
+          test "$STATUS" = "Success"
